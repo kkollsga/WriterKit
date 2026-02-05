@@ -10,7 +10,7 @@
 
 import React from 'react';
 import type { ReactNode } from 'react';
-import type { PageModel } from '@writerkit/pagination';
+import type { PageBoundary } from '@writerkit/pagination';
 
 /**
  * WriterKit context value type.
@@ -21,7 +21,7 @@ export interface WriterKitContextValue {
   /** Current document state */
   documentState: unknown | null;
   /** Page model array */
-  pages: PageModel[];
+  pages: PageBoundary[];
   /** Loading state */
   isLoading: boolean;
 }
@@ -79,7 +79,7 @@ export function Editor(_props: EditorProps): React.ReactElement {
  */
 export interface PageViewProps {
   /** Page model to render */
-  page: PageModel;
+  page: PageBoundary;
   /** Page scale factor */
   scale?: number;
   /** CSS class name */
@@ -110,14 +110,14 @@ export function useWriterKit(): WriterKitContextValue {
  * Hook to access the current page model.
  * Returns the array of pages and pagination utilities.
  */
-export function usePageModel(): {
-  pages: PageModel[];
+export function usePageBoundary(): {
+  pages: PageBoundary[];
   currentPage: number;
   totalPages: number;
   goToPage: (page: number) => void;
 } {
   // TODO: Not implemented
-  throw new Error('usePageModel not implemented');
+  throw new Error('usePageBoundary not implemented');
 }
 
 /**
