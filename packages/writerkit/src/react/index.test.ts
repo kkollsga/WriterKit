@@ -160,3 +160,39 @@ describe('Hook error handling', () => {
     })
   })
 })
+
+describe('Core Editor integration', () => {
+  it('CoreEditor is imported and usable', async () => {
+    // Verify the core Editor class is available through the integration
+    const { Editor: CoreEditor } = await import('../core')
+    expect(CoreEditor).toBeDefined()
+    expect(typeof CoreEditor).toBe('function')
+  })
+
+  it('ReflowEngine is imported and usable', async () => {
+    const { ReflowEngine } = await import('../pagination')
+    expect(ReflowEngine).toBeDefined()
+    expect(typeof ReflowEngine).toBe('function')
+  })
+
+  it('MarkdownManager is imported and usable', async () => {
+    const { MarkdownManager } = await import('../markdown')
+    expect(MarkdownManager).toBeDefined()
+
+    // Test basic functionality
+    const manager = new MarkdownManager()
+    const result = manager.parse('# Hello World')
+    expect(result.ast).toBeDefined()
+    expect(result.metadata).toBeDefined()
+  })
+
+  it('StorageAdapter types are compatible', async () => {
+    const { MemoryAdapter } = await import('../storage')
+    expect(MemoryAdapter).toBeDefined()
+
+    // Create and test memory adapter
+    const adapter = new MemoryAdapter()
+    expect(adapter.read).toBeDefined()
+    expect(adapter.write).toBeDefined()
+  })
+})

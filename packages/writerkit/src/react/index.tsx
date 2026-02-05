@@ -20,8 +20,6 @@ import React, {
 import type { ReactNode, CSSProperties } from 'react'
 import type { EditorView } from 'prosemirror-view'
 import type { EditorState, Transaction } from 'prosemirror-state'
-// ProseMirror node type if needed in future:
-// import type { Node as ProseMirrorNode } from 'prosemirror-model'
 import type {
   PageBoundary,
   PaginationModel,
@@ -33,7 +31,8 @@ import {
   createPageDimensions,
   DEFAULT_PAGINATION_CONFIG,
 } from '../pagination'
-import type { JSONContent, DocumentMetadata } from '../core'
+import type { JSONContent, DocumentMetadata, WriterKitExtension } from '../core'
+import { Editor as CoreEditor } from '../core'
 import { MarkdownManager } from '../markdown'
 import type { StorageAdapter } from '../storage'
 
@@ -48,7 +47,7 @@ export interface WriterKitConfig {
   /** Pagination configuration */
   pagination?: Partial<PaginationConfig>
   /** Extensions to load */
-  extensions?: unknown[]
+  extensions?: WriterKitExtension[]
   /** Whether the editor is editable */
   editable?: boolean
 }
@@ -382,8 +381,9 @@ export function WriterKitProvider({
       _registerView: registerView,
       _updateState: updateState,
       _reflowEngine: reflowEngineRef.current,
+      _extensions: config.extensions ?? [],
     }),
-    [contextValue, registerView, updateState]
+    [contextValue, registerView, updateState, config.extensions]
   )
 
   return (
@@ -424,8 +424,18 @@ export interface EditorProps {
 }
 
 /**
+ * Internal context type with private methods
+ */
+interface InternalContextValue extends WriterKitContextValue {
+  _registerView?: (view: EditorView | null) => void
+  _updateState?: (state: EditorState) => void
+  _reflowEngine?: ReflowEngine | null
+  _extensions?: WriterKitExtension[]
+}
+
+/**
  * Main WriterKit editor component.
- * Renders a paginated, editable document.
+ * Renders a paginated, editable document with full ProseMirror integration.
  *
  * @example
  * ```tsx
@@ -441,8 +451,8 @@ export interface EditorProps {
 export function Editor({
   content,
   editable = true,
-  onUpdate: _onUpdate,
-  onSelectionChange: _onSelectionChange,
+  onUpdate,
+  onSelectionChange,
   onFocus,
   onBlur,
   className = '',
@@ -450,24 +460,94 @@ export function Editor({
   placeholder,
   autoFocus = false,
 }: EditorProps): React.ReactElement {
-  // Note: _onUpdate and _onSelectionChange will be used when full ProseMirror integration is implemented
   const containerRef = useRef<HTMLDivElement>(null)
-  const context = useContext(WriterKitContext) as WriterKitContextValue & {
-    _registerView?: (view: EditorView | null) => void
-    _updateState?: (state: EditorState) => void
-    _reflowEngine?: ReflowEngine | null
-  }
+  const editorRef = useRef<CoreEditor | null>(null)
+  const context = useContext(WriterKitContext) as InternalContextValue | null
 
-  // Set local content if provided
+  // Initialize core editor on mount
   useEffect(() => {
-    if (content && context?.setContent) {
-      context.setContent(content)
-    }
-  }, [content, context])
+    if (!containerRef.current || editorRef.current) return
 
-  // Note: Full ProseMirror integration would require additional setup
-  // This is a placeholder structure that consumers would need to extend
-  // with actual ProseMirror schema and plugins
+    // Get extensions from context config
+    const extensions = context?._extensions ?? []
+
+    // Determine initial content
+    let initialContent: string | undefined
+    if (content) {
+      initialContent = typeof content === 'string' ? content : undefined
+    }
+
+    try {
+      // Create core editor
+      const editor = new CoreEditor({
+        element: containerRef.current,
+        extensions,
+        content: initialContent,
+        editable,
+        onUpdate: ({ editor: e }) => {
+          // Update context state
+          context?._updateState?.(e.state)
+
+          // Notify reflow engine of document changes
+          if (context?._reflowEngine && e.view) {
+            context._reflowEngine.requestReflow()
+          }
+
+          // Call user callback
+          onUpdate?.(e.getJSON())
+        },
+        onSelectionUpdate: ({ editor: e }) => {
+          const { from, to } = e.state.selection
+          onSelectionChange?.({ from, to })
+        },
+      })
+
+      editorRef.current = editor
+
+      // Register view with context
+      context?._registerView?.(editor.view)
+
+      // Connect reflow engine
+      if (context?._reflowEngine) {
+        context._reflowEngine.setView(editor.view)
+      }
+
+      // Set up focus/blur handlers
+      editor.on('focus', () => onFocus?.())
+      editor.on('blur', () => onBlur?.())
+
+      // Auto-focus if requested
+      if (autoFocus) {
+        editor.focus()
+      }
+    } catch (error) {
+      console.error('WriterKit: Failed to initialize editor', error)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (editorRef.current) {
+        context?._registerView?.(null)
+        editorRef.current.destroy()
+        editorRef.current = null
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run on mount
+
+  // Update editable state
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.setEditable(editable)
+    }
+  }, [editable])
+
+  // Update content when it changes externally
+  useEffect(() => {
+    if (content && editorRef.current) {
+      editorRef.current.setContent(content)
+    }
+  }, [content])
 
   const editorStyle: CSSProperties = {
     ...style,
@@ -475,43 +555,17 @@ export function Editor({
     minHeight: '100%',
   }
 
+  // Show placeholder when editor is empty and unfocused
+  const showPlaceholder = placeholder && !editorRef.current?.isEmpty === false
+
   return (
     <div
       ref={containerRef}
       className={`writerkit-editor ${className}`}
       style={editorStyle}
       data-editable={editable}
-      data-placeholder={placeholder}
-      tabIndex={autoFocus ? 0 : undefined}
-      onFocus={onFocus}
-      onBlur={onBlur}
-    >
-      {/*
-        ProseMirror editor would be mounted here.
-        The actual implementation requires:
-        1. Creating a ProseMirror schema from extensions
-        2. Setting up plugins (keymap, history, etc.)
-        3. Creating EditorState and EditorView
-        4. Handling transactions and updates
-
-        This component provides the React wrapper structure.
-        See the ProseMirror documentation for full integration.
-      */}
-      <div className="writerkit-editor-content">
-        {context?.doc ? (
-          <div className="writerkit-editor-document">
-            {/* Document content would be rendered by ProseMirror */}
-            <p style={{ color: '#666', fontStyle: 'italic' }}>
-              Editor initialized. Connect ProseMirror view for full functionality.
-            </p>
-          </div>
-        ) : placeholder ? (
-          <div className="writerkit-editor-placeholder" style={{ color: '#999' }}>
-            {placeholder}
-          </div>
-        ) : null}
-      </div>
-    </div>
+      data-placeholder={showPlaceholder ? placeholder : undefined}
+    />
   )
 }
 
