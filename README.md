@@ -8,24 +8,39 @@ A ProseMirror-based toolkit for building word processors with native pagination 
 - **Markdown Native**: Markdown as the single source of truth with YAML frontmatter
 - **Searchable Exports**: PDF with real text (not screenshots), DOCX, and ODT
 - **High Performance**: Incremental reflow, virtual pagination, measurement caching
-- **Extensible**: TipTap-inspired extension system
+- **Extensible**: Modular extension system for custom nodes, marks, and behaviors
 
-## Packages
+## Installation
 
-| Package | Description |
-|---------|-------------|
-| `@writerkit/core` | Core editor, extensions, and document model |
-| `@writerkit/pagination` | Page computation engine |
-| `@writerkit/markdown` | Markdown parsing and serialization |
-| `@writerkit/export` | PDF, DOCX, and ODT export |
-| `@writerkit/storage` | Storage abstraction layer |
-| `@writerkit/react` | React bindings |
-| `@writerkit/extensions` | Built-in extensions (tables, images, headers/footers) |
+```bash
+npm install writerkit
+# or
+pnpm add writerkit
+```
+
+## Subpath Imports
+
+Import from specific subpaths for better tree-shaking:
+
+```typescript
+import { Editor } from 'writerkit/core'
+import { ReflowEngine } from 'writerkit/pagination'
+import { ExportPipeline } from 'writerkit/export'
+import { MarkdownManager } from 'writerkit/markdown'
+import { StorageAdapter } from 'writerkit/storage'
+import { TableExtension } from 'writerkit/extensions'
+```
+
+Or import everything from the main package:
+
+```typescript
+import { Editor, ReflowEngine, ExportPipeline } from 'writerkit'
+```
 
 ## Quick Start
 
 ```typescript
-import { Extension, Node, Mark } from '@writerkit/core'
+import { Extension, Node, Mark } from 'writerkit/core'
 
 // Create a custom extension
 const MyExtension = Extension.create({

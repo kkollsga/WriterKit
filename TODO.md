@@ -9,7 +9,7 @@ This document captures all findings from the planning stage, including purpose, 
 1. [Project Purpose](#1-project-purpose)
 2. [Problem Statement](#2-problem-statement)
 3. [Design Goals](#3-design-goals)
-4. [TipTap Patterns to Preserve](#4-tiptap-patterns-to-preserve)
+4. [Extension Patterns to Preserve](#4-extension-patterns-to-preserve)
 5. [Architecture](#5-architecture)
 6. [Package Details](#6-package-details)
 7. [Key Types & Interfaces](#7-key-types--interfaces)
@@ -33,13 +33,13 @@ This document captures all findings from the planning stage, including purpose, 
 - **Searchable PDF export** - Real text using pdf-lib, not html2canvas screenshots
 - **DOCX and ODT export** - Native document formats
 - **High performance** - Incremental reflow, virtual pagination, measurement caching
-- **TipTap-inspired API** - Familiar extension system for developers
+- **Developer-friendly API** - Familiar extension system for developers
 
 ### Why Build This?
 
 The WordProcessor project revealed fundamental limitations in existing solutions:
 
-1. **TipTap/ProseMirror don't have native page concepts** - Pages are bolted on as visual overlays
+1. **ProseMirror don't have native page concepts** - Pages are bolted on as visual overlays
 2. **Export is fragmented** - Each format parsed/rendered separately, inconsistent results
 3. **PDF exports are pixel-based** - html2canvas produces non-searchable, large files
 4. **Markdown parsing is fragile** - Regex-based, breaks on nested formatting
@@ -63,8 +63,8 @@ WriterKit solves these by making pages a first-class citizen computed from conte
 | Performance overhead | ResizeObserver + debounce on every update | Sluggish on large docs |
 
 **Key files analyzed:**
-- `WordProcessor-kopi/src/lib/tiptap/pageSpacer.ts` - CSS margin hack with 70% threshold
-- `WordProcessor-kopi/src/lib/tiptap/pageBreak.ts` - Page break as content node
+- `WordProcessor-kopi/src/lib/editor/pageSpacer.ts` - CSS margin hack with 70% threshold
+- `WordProcessor-kopi/src/lib/editor/pageBreak.ts` - Page break as content node
 
 ### 2.2 Export Issues
 
@@ -120,10 +120,10 @@ WriterKit solves these by making pages a first-class citizen computed from conte
    - Web worker exports
 
 5. **Extensible**
-   - TipTap-inspired plugin system
+   - Modular plugin system
    - Custom export renderers per node type
    - Storage adapter pattern
-   - Migration compatibility layer for existing TipTap projects
+   - Migration compatibility layer for existing ProseMirror projects
 
 ### 3.2 Non-Goals
 
@@ -133,9 +133,9 @@ WriterKit solves these by making pages a first-class citizen computed from conte
 
 ---
 
-## 4. TipTap Patterns to Preserve
+## 4. Extension Patterns to Preserve
 
-These patterns from TipTap made WordProcessor development smooth and **must be preserved**:
+These patterns made WordProcessor development smooth and **must be preserved**:
 
 ### 4.1 Unified Extension Model
 
@@ -1008,7 +1008,7 @@ jobs:
 
 ### Phase 6: Migration & Documentation
 
-- [ ] @writerkit/compat TipTap adapter
+- [ ] @writerkit/compat ProseMirror adapter
 - [ ] Migration guide
 - [ ] API documentation
 - [ ] Example applications
@@ -1122,6 +1122,5 @@ jobs:
 - [mdast Specification](https://github.com/syntax-tree/mdast)
 - [pdf-lib Documentation](https://pdf-lib.js.org/)
 - [docx Documentation](https://docx.js.org/)
-- [TipTap Documentation](https://tiptap.dev/)
 - [prosemirror-unified](https://github.com/marekdedic/prosemirror-unified)
 - [remark-prosemirror](https://github.com/handlewithcarecollective/remark-prosemirror)

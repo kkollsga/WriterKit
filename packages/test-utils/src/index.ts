@@ -4,7 +4,7 @@
  * Testing utilities for WriterKit packages.
  */
 
-import type { JSONContent, DocumentMetadata } from '@writerkit/core'
+import type { JSONContent, DocumentMetadata } from 'writerkit/core'
 
 /**
  * Create a minimal valid ProseMirror document
