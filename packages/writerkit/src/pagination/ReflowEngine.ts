@@ -55,6 +55,8 @@ export class ReflowEngine {
 
   // Debounce state
   private pendingReflow: ReturnType<typeof setTimeout> | null = null
+  private pendingRAF: number | null = null
+  private pendingIdleCallback: number | null = null
   private pendingChanges: ReflowChange[] = []
 
   // Event handlers
@@ -65,6 +67,8 @@ export class ReflowEngine {
   // State
   private isReflowing = false
   private lastReflowTime = 0
+  private reflowCount = 0
+  private totalReflowTime = 0
 
   constructor(config: Partial<PaginationConfig> = {}) {
     this.config = { ...DEFAULT_PAGINATION_CONFIG, ...config }
@@ -143,11 +147,63 @@ export class ReflowEngine {
    * Request immediate reflow (no debounce)
    */
   requestImmediateReflow(): void {
+    this.cancelPendingReflows()
+    this.performReflow()
+  }
+
+  /**
+   * Request reflow using requestAnimationFrame
+   * Better for synchronizing with browser paint cycle
+   */
+  requestRAFReflow(): void {
+    this.cancelPendingReflows()
+
+    this.pendingRAF = requestAnimationFrame(() => {
+      this.pendingRAF = null
+      this.performReflow()
+    })
+  }
+
+  /**
+   * Request idle reflow using requestIdleCallback
+   * Best for non-urgent reflows that shouldn't block interaction
+   */
+  requestIdleReflow(timeout = 1000): void {
+    this.cancelPendingReflows()
+
+    if (typeof requestIdleCallback === 'function') {
+      this.pendingIdleCallback = requestIdleCallback(
+        () => {
+          this.pendingIdleCallback = null
+          this.performReflow()
+        },
+        { timeout }
+      )
+    } else {
+      // Fallback to setTimeout for environments without requestIdleCallback
+      this.pendingReflow = setTimeout(() => {
+        this.pendingReflow = null
+        this.performReflow()
+      }, 0)
+    }
+  }
+
+  /**
+   * Cancel all pending reflows
+   */
+  private cancelPendingReflows(): void {
     if (this.pendingReflow !== null) {
       clearTimeout(this.pendingReflow)
       this.pendingReflow = null
     }
-    this.performReflow()
+    if (this.pendingRAF !== null) {
+      cancelAnimationFrame(this.pendingRAF)
+      this.pendingRAF = null
+    }
+    if (this.pendingIdleCallback !== null && typeof cancelIdleCallback === 'function') {
+      cancelIdleCallback(this.pendingIdleCallback)
+      this.pendingIdleCallback = null
+    }
   }
 
   /**
@@ -198,7 +254,7 @@ export class ReflowEngine {
     }
 
     this.isReflowing = true
-    this.pendingReflow = null
+    const startTime = performance.now()
 
     // Emit reflow start
     this.reflowStartHandlers.forEach((h) => h())
@@ -235,6 +291,11 @@ export class ReflowEngine {
 
       this.currentModel = newModel
       this.lastReflowTime = Date.now()
+
+      // Track performance
+      const duration = performance.now() - startTime
+      this.totalReflowTime += duration
+      this.reflowCount++
 
       // Emit events
       if (pagesChanged) {
@@ -335,10 +396,7 @@ export class ReflowEngine {
    * Clean up resources
    */
   destroy(): void {
-    if (this.pendingReflow !== null) {
-      clearTimeout(this.pendingReflow)
-      this.pendingReflow = null
-    }
+    this.cancelPendingReflows()
     this.reflowStartHandlers = []
     this.reflowEndHandlers = []
     this.pagesChangedHandlers = []
@@ -348,14 +406,17 @@ export class ReflowEngine {
   }
 
   /**
-   * Get statistics for debugging
+   * Get statistics for debugging and performance monitoring
    */
   getStats(): {
     lastReflowTime: number
     pageCount: number
-    cacheStats: { size: number; hitRate: number }
+    cacheStats: { size: number; hitRate: number; hits: number; misses: number }
     isReflowing: boolean
     pendingChanges: number
+    reflowCount: number
+    totalReflowTime: number
+    averageReflowTime: number
   } {
     return {
       lastReflowTime: this.lastReflowTime,
@@ -363,6 +424,18 @@ export class ReflowEngine {
       cacheStats: this.measurer.getCacheStats(),
       isReflowing: this.isReflowing,
       pendingChanges: this.pendingChanges.length,
+      reflowCount: this.reflowCount,
+      totalReflowTime: this.totalReflowTime,
+      averageReflowTime: this.reflowCount > 0 ? this.totalReflowTime / this.reflowCount : 0,
     }
+  }
+
+  /**
+   * Reset performance statistics
+   */
+  resetStats(): void {
+    this.reflowCount = 0
+    this.totalReflowTime = 0
+    this.measurer.resetStats()
   }
 }

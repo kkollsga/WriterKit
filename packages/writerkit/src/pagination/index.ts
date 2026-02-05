@@ -74,5 +74,5 @@ export { PageComputer } from './PageComputer'
 export { ReflowEngine } from './ReflowEngine'
 
 // PageView
-export { PageView, PageViewManager } from './PageView'
-export type { PageViewOptions } from './PageView'
+export { PageView, PageViewManager, VirtualPaginator } from './PageView'
+export type { PageViewOptions, VirtualPaginatorConfig } from './PageView'

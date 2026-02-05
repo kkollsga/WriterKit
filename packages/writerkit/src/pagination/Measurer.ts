@@ -24,7 +24,28 @@ interface MeasurementCacheEntry {
   contentHash: string
   /** Timestamp when measured */
   measuredAt: number
+  /** Last access time for LRU eviction */
+  lastAccessedAt: number
 }
+
+/**
+ * Cache statistics for performance monitoring
+ */
+interface CacheStatistics {
+  /** Total cache hits */
+  hits: number
+  /** Total cache misses */
+  misses: number
+  /** Current cache size */
+  size: number
+  /** Cache hit rate (0-1) */
+  hitRate: number
+}
+
+/**
+ * Default maximum cache entries before LRU eviction
+ */
+const DEFAULT_MAX_CACHE_SIZE = 500
 
 /**
  * Measurer handles measuring block heights for pagination.
@@ -52,10 +73,16 @@ export class Measurer {
   private dimensions: PageDimensions
   private view: EditorView | null = null
   private cache: Map<number, MeasurementCacheEntry> = new Map()
+  private maxCacheSize: number
 
-  constructor(config: PaginationConfig, dimensions: PageDimensions) {
+  // Cache statistics
+  private cacheHits = 0
+  private cacheMisses = 0
+
+  constructor(config: PaginationConfig, dimensions: PageDimensions, maxCacheSize = DEFAULT_MAX_CACHE_SIZE) {
     this.config = config
     this.dimensions = dimensions
+    this.maxCacheSize = maxCacheSize
   }
 
   /**
@@ -381,14 +408,22 @@ export class Measurer {
    */
   private getCached(pos: number, node: ProseMirrorNode): number | null {
     const entry = this.cache.get(pos)
-    if (!entry) return null
+    if (!entry) {
+      this.cacheMisses++
+      return null
+    }
 
     const hash = this.getContentHash(node)
     if (entry.contentHash !== hash) {
       // Content changed, invalidate cache
       this.cache.delete(pos)
+      this.cacheMisses++
       return null
     }
+
+    // Update LRU timestamp
+    entry.lastAccessedAt = Date.now()
+    this.cacheHits++
 
     return entry.height
   }
@@ -397,11 +432,32 @@ export class Measurer {
    * Store measurement in cache
    */
   private setCached(pos: number, node: ProseMirrorNode, height: number): void {
+    // Evict oldest entries if cache is full
+    if (this.cache.size >= this.maxCacheSize) {
+      this.evictLRU()
+    }
+
+    const now = Date.now()
     this.cache.set(pos, {
       height,
       contentHash: this.getContentHash(node),
-      measuredAt: Date.now(),
+      measuredAt: now,
+      lastAccessedAt: now,
     })
+  }
+
+  /**
+   * Evict least recently used cache entries
+   */
+  private evictLRU(): void {
+    // Find and remove oldest 10% of entries
+    const entriesToRemove = Math.max(1, Math.floor(this.cache.size * 0.1))
+    const entries = Array.from(this.cache.entries())
+      .sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt)
+
+    for (let i = 0; i < entriesToRemove && i < entries.length; i++) {
+      this.cache.delete(entries[i][0])
+    }
   }
 
   /**
@@ -425,10 +481,88 @@ export class Measurer {
   /**
    * Get cache statistics (for debugging)
    */
-  getCacheStats(): { size: number; hitRate: number } {
+  getCacheStats(): CacheStatistics {
+    const total = this.cacheHits + this.cacheMisses
     return {
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
       size: this.cache.size,
-      hitRate: 0, // Would need to track hits/misses
+      hitRate: total > 0 ? this.cacheHits / total : 0,
     }
+  }
+
+  /**
+   * Reset cache statistics
+   */
+  resetStats(): void {
+    this.cacheHits = 0
+    this.cacheMisses = 0
+  }
+
+  /**
+   * Batch measure multiple nodes efficiently
+   * Minimizes DOM reads by batching measurement
+   */
+  measureNodes(nodes: Array<{ node: ProseMirrorNode; pos: number }>): BlockMeasurement[] {
+    // First pass: collect nodes that need DOM measurement
+    const needsDOMMeasurement: Array<{ node: ProseMirrorNode; pos: number; index: number }> = []
+    const results: BlockMeasurement[] = []
+
+    nodes.forEach(({ node, pos }, index) => {
+      // Check cache first
+      const cached = this.getCached(pos, node)
+      if (cached !== null) {
+        results[index] = {
+          pos,
+          type: node.type.name,
+          height: cached,
+          splittable: this.isSplittable(node),
+          minHeight: this.getMinHeight(node),
+          itemHeights: this.getItemHeights(node),
+        }
+      } else {
+        needsDOMMeasurement.push({ node, pos, index })
+        // Placeholder
+        results[index] = null as unknown as BlockMeasurement
+      }
+    })
+
+    // Second pass: batch DOM measurements
+    if (needsDOMMeasurement.length > 0 && this.view) {
+      // Force layout once before measuring
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      this.view.dom.offsetHeight
+
+      for (const { node, pos, index } of needsDOMMeasurement) {
+        const height = this.measureNodeDOM(node, pos)
+        this.setCached(pos, node, height)
+
+        results[index] = {
+          pos,
+          type: node.type.name,
+          height,
+          splittable: this.isSplittable(node),
+          minHeight: this.getMinHeight(node),
+          itemHeights: this.getItemHeights(node),
+        }
+      }
+    } else if (needsDOMMeasurement.length > 0) {
+      // No view, use estimation
+      for (const { node, pos, index } of needsDOMMeasurement) {
+        const height = this.estimateNodeHeight(node)
+        this.setCached(pos, node, height)
+
+        results[index] = {
+          pos,
+          type: node.type.name,
+          height,
+          splittable: this.isSplittable(node),
+          minHeight: this.getMinHeight(node),
+          itemHeights: this.getItemHeights(node),
+        }
+      }
+    }
+
+    return results
   }
 }

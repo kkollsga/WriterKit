@@ -138,6 +138,7 @@ export {
   ReflowEngine,
   PageView,
   PageViewManager,
+  VirtualPaginator,
 } from './pagination'
 
 export type {
@@ -152,6 +153,7 @@ export type {
   PosRange,
   ReflowChange,
   PageViewOptions,
+  VirtualPaginatorConfig,
 } from './pagination'
 
 // =============================================================================
