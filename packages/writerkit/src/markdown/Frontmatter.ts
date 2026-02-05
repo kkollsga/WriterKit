@@ -1,5 +1,9 @@
-import matter from 'gray-matter'
+import { YAMLParser } from './YAMLParser'
+import { YAMLStringifier } from './YAMLStringifier'
 import type { DocumentMetadata, Margins, HeaderFooterConfig } from '../core'
+
+const yamlParser = new YAMLParser()
+const yamlStringifier = new YAMLStringifier()
 
 /**
  * Default document metadata values
@@ -45,7 +49,7 @@ export class Frontmatter {
    * @returns Parsed metadata and body content
    */
   parse(content: string): { metadata: DocumentMetadata; body: string } {
-    const { data, content: body } = matter(content)
+    const { data, content: body } = yamlParser.extractFrontmatter(content)
 
     // Deep merge with defaults
     const metadata = this.mergeWithDefaults(data as Partial<DocumentMetadata>)
@@ -72,8 +76,11 @@ export class Frontmatter {
       ? this.removeDefaults(metadata)
       : this.removeUndefined(metadata)
 
-    // Use gray-matter to stringify
-    return matter.stringify(body, frontmatterData)
+    // Use custom YAML stringifier
+    return yamlStringifier.stringifyWithContent(
+      frontmatterData as Record<string, unknown>,
+      body
+    )
   }
 
   /**

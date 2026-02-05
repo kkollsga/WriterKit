@@ -12,7 +12,9 @@ import type {
   BlockMeasurement,
   PaginationConfig,
   PageDimensions,
+  LineMeasurement,
 } from './types'
+import { LineMeasurer } from './LineMeasurer'
 
 /**
  * Cache entry for a measured block
@@ -74,15 +76,20 @@ export class Measurer {
   private view: EditorView | null = null
   private cache: Map<number, MeasurementCacheEntry> = new Map()
   private maxCacheSize: number
+  private lineMeasurer: LineMeasurer
 
   // Cache statistics
   private cacheHits = 0
   private cacheMisses = 0
 
+  // Line measurement cache
+  private lineCache: Map<number, LineMeasurement[]> = new Map()
+
   constructor(config: PaginationConfig, dimensions: PageDimensions, maxCacheSize = DEFAULT_MAX_CACHE_SIZE) {
     this.config = config
     this.dimensions = dimensions
     this.maxCacheSize = maxCacheSize
+    this.lineMeasurer = new LineMeasurer(config)
   }
 
   /**
@@ -106,10 +113,9 @@ export class Measurer {
    */
   measureDocument(doc: ProseMirrorNode): BlockMeasurement[] {
     const measurements: BlockMeasurement[] = []
-    let pos = 0
 
     doc.forEach((node, offset) => {
-      const nodePos = pos + offset + 1 // +1 for doc node itself
+      const nodePos = offset + 1 // +1 for doc node itself
       const measurement = this.measureNode(node, nodePos)
       measurements.push(measurement)
     })
@@ -134,6 +140,7 @@ export class Measurer {
     // Try to get from cache
     const cached = this.getCached(pos, node)
     if (cached !== null) {
+      const lines = this.lineCache.get(pos)
       return {
         pos,
         type: node.type.name,
@@ -141,6 +148,9 @@ export class Measurer {
         splittable: this.isSplittable(node),
         minHeight: this.getMinHeight(node),
         itemHeights: this.getItemHeights(node),
+        lines,
+        lineCount: lines?.length,
+        splittableAtLine: lines && lines.length > 1,
       }
     }
 
@@ -155,6 +165,9 @@ export class Measurer {
     // Cache the measurement
     this.setCached(pos, node, height)
 
+    // Get line measurements if available
+    const lines = this.lineCache.get(pos)
+
     return {
       pos,
       type: node.type.name,
@@ -162,6 +175,9 @@ export class Measurer {
       splittable: this.isSplittable(node),
       minHeight: this.getMinHeight(node),
       itemHeights: this.getItemHeights(node),
+      lines,
+      lineCount: lines?.length,
+      splittableAtLine: lines && lines.length > 1,
     }
   }
 
@@ -181,6 +197,11 @@ export class Measurer {
         const rect = domNode.getBoundingClientRect()
         const heightPx = rect.height
 
+        // Measure lines for text blocks
+        if (this.isLineSplittableType(node.type.name)) {
+          this.measureLinesForBlock(domNode, pos)
+        }
+
         // Convert pixels to points
         return heightPx / this.config.pixelsPerPoint
       }
@@ -189,6 +210,40 @@ export class Measurer {
     }
 
     return this.estimateNodeHeight(node)
+  }
+
+  /**
+   * Measure individual lines within a block element
+   */
+  private measureLinesForBlock(element: HTMLElement, pos: number): void {
+    const blockLines = this.lineMeasurer.measureLines(element)
+
+    // Convert to LineMeasurement format and cache
+    const lines: LineMeasurement[] = blockLines.lines.map(line => ({
+      index: line.index,
+      heightPx: line.height,
+      height: line.height / this.config.pixelsPerPoint,
+      topPx: line.top,
+      bottomPx: line.bottom,
+      isFirst: line.isFirst,
+      isLast: line.isLast,
+    }))
+
+    this.lineCache.set(pos, lines)
+  }
+
+  /**
+   * Get cached line measurements for a block
+   */
+  getLineMeasurements(pos: number): LineMeasurement[] | undefined {
+    return this.lineCache.get(pos)
+  }
+
+  /**
+   * Check if a node type can be split at line boundaries
+   */
+  private isLineSplittableType(nodeType: string): boolean {
+    return ['paragraph', 'listItem', 'blockquote'].includes(nodeType)
   }
 
   /**
@@ -476,6 +531,7 @@ export class Measurer {
    */
   clearCache(): void {
     this.cache.clear()
+    this.lineCache.clear()
   }
 
   /**

@@ -92,6 +92,26 @@ export interface PaginationModel {
 }
 
 /**
+ * Represents a single line within a block
+ */
+export interface LineMeasurement {
+  /** Index of this line within the block (0-based) */
+  index: number
+  /** Height of this line in pixels */
+  heightPx: number
+  /** Height of this line in points */
+  height: number
+  /** Top position relative to block start (pixels) */
+  topPx: number
+  /** Bottom position relative to block start (pixels) */
+  bottomPx: number
+  /** Whether this is the first line of the block */
+  isFirst: boolean
+  /** Whether this is the last line of the block */
+  isLast: boolean
+}
+
+/**
  * Result of measuring a block/node
  */
 export interface BlockMeasurement {
@@ -107,6 +127,12 @@ export interface BlockMeasurement {
   minHeight?: number
   /** For splittable blocks, individual item heights */
   itemHeights?: number[]
+  /** Line-level measurements for text blocks */
+  lines?: LineMeasurement[]
+  /** Number of lines in this block */
+  lineCount?: number
+  /** Whether this block can be split at line boundaries */
+  splittableAtLine?: boolean
 }
 
 /**
@@ -248,4 +274,52 @@ export interface ReflowChange {
   pos: number
   /** Affected range */
   range: PosRange
+}
+
+/**
+ * A spacer to be injected at a page boundary to push content to next page
+ */
+export interface PageSpacer {
+  /** Position in document where spacer should be inserted (before this position) */
+  pos: number
+  /** Height of the spacer in pixels */
+  height: number
+  /** Page number this spacer ends */
+  pageNumber: number
+  /** Visual offset from top of content where this spacer should appear (in pixels) */
+  visualOffset: number
+  /** If splitting within a block, the line index where split occurs */
+  splitAtLine?: number
+  /** If splitting within a block, offset from top of block to split point (pixels) */
+  splitOffset?: number
+}
+
+/**
+ * Extended block measurement with visual position tracking
+ */
+export interface VisualBlockMeasurement extends BlockMeasurement {
+  /** Visual offset from top of content (cumulative, in pixels) */
+  visualTop: number
+  /** Visual bottom position (visualTop + height in pixels) */
+  visualBottom: number
+  /** Which page this block belongs to (1-indexed) */
+  pageNumber: number
+  /** If this block is split, which part this is (1 = first part, 2 = continuation) */
+  splitPart?: number
+  /** If split, the line range this part contains [startLine, endLine] */
+  lineRange?: [number, number]
+  /** If split, the height of this part in pixels */
+  partHeightPx?: number
+}
+
+/**
+ * Extended pagination model with visual information
+ */
+export interface VisualPaginationModel extends PaginationModel {
+  /** Block measurements with visual positions */
+  visualBlocks: VisualBlockMeasurement[]
+  /** Spacers to inject at page breaks */
+  spacers: PageSpacer[]
+  /** Map of document position to page number */
+  positionToPage: Map<number, number>
 }

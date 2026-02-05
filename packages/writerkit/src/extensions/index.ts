@@ -73,6 +73,293 @@ export interface ListOptions {
 }
 
 // =============================================================================
+// Heading Extension
+// =============================================================================
+
+/**
+ * Heading extension for WriterKit.
+ * Provides h1-h6 heading support.
+ */
+export const HeadingExtension = Extension.create({
+  name: 'heading',
+
+  addNodes() {
+    return {
+      heading: {
+        group: 'block',
+        content: 'inline*',
+        attrs: {
+          level: { default: 1 },
+        },
+        defining: true,
+        parseDOM: [
+          { tag: 'h1', attrs: { level: 1 } },
+          { tag: 'h2', attrs: { level: 2 } },
+          { tag: 'h3', attrs: { level: 3 } },
+          { tag: 'h4', attrs: { level: 4 } },
+          { tag: 'h5', attrs: { level: 5 } },
+          { tag: 'h6', attrs: { level: 6 } },
+        ],
+        toDOM(node) {
+          return [`h${node.attrs.level}`, 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Blockquote Extension
+// =============================================================================
+
+/**
+ * Blockquote extension for WriterKit.
+ */
+export const BlockquoteExtension = Extension.create({
+  name: 'blockquote',
+
+  addNodes() {
+    return {
+      blockquote: {
+        group: 'block',
+        content: 'block+',
+        defining: true,
+        parseDOM: [{ tag: 'blockquote' }],
+        toDOM() {
+          return ['blockquote', 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Code Block Extension
+// =============================================================================
+
+/**
+ * Code block extension for WriterKit.
+ */
+export const CodeBlockExtension = Extension.create({
+  name: 'codeBlock',
+
+  addNodes() {
+    return {
+      codeBlock: {
+        group: 'block',
+        content: 'text*',
+        marks: '',
+        code: true,
+        defining: true,
+        attrs: {
+          language: { default: null },
+        },
+        parseDOM: [
+          {
+            tag: 'pre',
+            preserveWhitespace: 'full' as const,
+            getAttrs(dom) {
+              const el = dom as HTMLElement
+              const code = el.querySelector('code')
+              return {
+                language: code?.getAttribute('data-language') || null,
+              }
+            },
+          },
+        ],
+        toDOM(node) {
+          return [
+            'pre',
+            {},
+            ['code', { 'data-language': node.attrs.language || undefined }, 0],
+          ]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Horizontal Rule Extension
+// =============================================================================
+
+/**
+ * Horizontal rule extension for WriterKit.
+ */
+export const HorizontalRuleExtension = Extension.create({
+  name: 'horizontalRule',
+
+  addNodes() {
+    return {
+      horizontalRule: {
+        group: 'block',
+        parseDOM: [{ tag: 'hr' }],
+        toDOM() {
+          return ['hr']
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Hard Break Extension
+// =============================================================================
+
+/**
+ * Hard break extension for WriterKit.
+ */
+export const HardBreakExtension = Extension.create({
+  name: 'hardBreak',
+
+  addNodes() {
+    return {
+      hardBreak: {
+        inline: true,
+        group: 'inline',
+        selectable: false,
+        parseDOM: [{ tag: 'br' }],
+        toDOM() {
+          return ['br']
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Bold Mark Extension
+// =============================================================================
+
+/**
+ * Bold mark extension for WriterKit.
+ */
+export const BoldExtension = Extension.create({
+  name: 'bold',
+
+  addMarks() {
+    return {
+      bold: {
+        parseDOM: [
+          { tag: 'strong' },
+          { tag: 'b' },
+          { style: 'font-weight=bold' },
+          { style: 'font-weight=700' },
+        ],
+        toDOM() {
+          return ['strong', 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Italic Mark Extension
+// =============================================================================
+
+/**
+ * Italic mark extension for WriterKit.
+ */
+export const ItalicExtension = Extension.create({
+  name: 'italic',
+
+  addMarks() {
+    return {
+      italic: {
+        parseDOM: [
+          { tag: 'em' },
+          { tag: 'i' },
+          { style: 'font-style=italic' },
+        ],
+        toDOM() {
+          return ['em', 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Code Mark Extension
+// =============================================================================
+
+/**
+ * Inline code mark extension for WriterKit.
+ */
+export const CodeExtension = Extension.create({
+  name: 'code',
+
+  addMarks() {
+    return {
+      code: {
+        parseDOM: [{ tag: 'code' }],
+        toDOM() {
+          return ['code', 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Link Mark Extension
+// =============================================================================
+
+/**
+ * Link mark extension for WriterKit.
+ */
+export const LinkExtension = Extension.create({
+  name: 'link',
+
+  addMarks() {
+    return {
+      link: {
+        attrs: {
+          href: {},
+          title: { default: null },
+        },
+        inclusive: false,
+        parseDOM: [
+          {
+            tag: 'a[href]',
+            getAttrs(dom) {
+              const el = dom as HTMLElement
+              return {
+                href: el.getAttribute('href'),
+                title: el.getAttribute('title'),
+              }
+            },
+          },
+        ],
+        toDOM(node) {
+          return ['a', { href: node.attrs.href, title: node.attrs.title }, 0]
+        },
+      },
+    }
+  },
+})
+
+// =============================================================================
+// Basic Text Extensions Bundle
+// =============================================================================
+
+/**
+ * Bundle of all basic text extensions for markdown support.
+ */
+export const BasicTextExtensions = [
+  HeadingExtension,
+  BlockquoteExtension,
+  CodeBlockExtension,
+  HorizontalRuleExtension,
+  HardBreakExtension,
+  BoldExtension,
+  ItalicExtension,
+  CodeExtension,
+  LinkExtension,
+]
+
+// =============================================================================
 // Tables Extension
 // =============================================================================
 
@@ -1253,11 +1540,24 @@ export const Tables = TableExtension
 export const Images = ImageExtension
 export const HeadersFooters = HeaderFooterExtension
 export const Lists = ListsExtension
+export const Heading = HeadingExtension
+export const Blockquote = BlockquoteExtension
+export const CodeBlock = CodeBlockExtension
+export const HorizontalRule = HorizontalRuleExtension
+export const HardBreak = HardBreakExtension
+export const Bold = BoldExtension
+export const Italic = ItalicExtension
+export const Code = CodeExtension
+export const Link = LinkExtension
 
 /**
  * Bundle of all WriterKit extensions.
+ * Includes basic text extensions and rich content extensions.
  */
 export const WriterKitExtensions = [
+  // Basic text extensions (for markdown support)
+  ...BasicTextExtensions,
+  // Rich content extensions
   TableExtension,
   ImageExtension,
   HeaderFooterExtension,

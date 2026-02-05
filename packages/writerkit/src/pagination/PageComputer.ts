@@ -17,6 +17,9 @@ import type {
   PaginationConfig,
   PaginationModel,
   SplitResult,
+  VisualPaginationModel,
+  VisualBlockMeasurement,
+  PageSpacer,
 } from './types'
 import { Measurer } from './Measurer'
 
@@ -78,6 +81,235 @@ export class PageComputer {
       dimensions: this.dimensions,
       totalContentHeight,
       pageCount: pages.length,
+    }
+  }
+
+  /**
+   * Compute visual pagination model with spacers
+   *
+   * This is the single source of truth for page layout. It provides:
+   * - Visual positions (in pixels) for each block
+   * - Which page each block belongs to
+   * - Spacers to inject at page breaks with exact heights
+   * - Support for line-level splitting within paragraphs
+   *
+   * @param pageGapPx - Gap between pages in pixels
+   * @param marginPx - Top/bottom margin of each page in pixels
+   */
+  computeVisual(
+    doc: ProseMirrorNode,
+    pageGapPx: number = 40,
+    marginPx: number = 72
+  ): VisualPaginationModel {
+    if (!this.measurer) {
+      throw new Error('Measurer not set. Call setMeasurer() first.')
+    }
+
+    // Measure all blocks
+    const measurements = this.measurer.measureDocument(doc)
+
+    // Convert contentHeight from points to pixels
+    const pixelsPerPoint = this.config.pixelsPerPoint
+    const contentHeightPx = this.dimensions.contentHeight * pixelsPerPoint
+
+    // Build visual blocks with page assignments and spacers
+    const visualBlocks: VisualBlockMeasurement[] = []
+    const spacers: PageSpacer[] = []
+    const positionToPage = new Map<number, number>()
+
+    let currentPageNum = 1
+    let cumulativeHeightOnPage = 0 // Height used on current page
+    let visualOffset = 0 // Total visual offset including spacers
+
+    for (const block of measurements) {
+      const blockHeightPx = block.height * pixelsPerPoint
+      const availableSpace = contentHeightPx - cumulativeHeightOnPage
+
+      // Check if this block would cross the page boundary
+      if (blockHeightPx > availableSpace) {
+        // Block doesn't fit entirely - check if we can split it at line level
+        const splitResult = this.tryLineLevelSplit(block, availableSpace, pixelsPerPoint)
+
+        if (splitResult.canSplit && splitResult.keepHeightPx > 0) {
+          // Split the block at line boundary
+          const keepHeightPx = splitResult.keepHeightPx
+          const overflowHeightPx = blockHeightPx - keepHeightPx
+
+          // Add first part of block to current page
+          visualBlocks.push({
+            ...block,
+            visualTop: visualOffset,
+            visualBottom: visualOffset + keepHeightPx,
+            pageNumber: currentPageNum,
+            splitPart: 1,
+            lineRange: [0, splitResult.splitAtLine - 1],
+            partHeightPx: keepHeightPx,
+          })
+
+          positionToPage.set(block.pos, currentPageNum)
+          visualOffset += keepHeightPx
+          cumulativeHeightOnPage += keepHeightPx
+
+          // Create spacer with split information
+          const remainingSpace = contentHeightPx - cumulativeHeightOnPage
+          const spacerHeightPx = remainingSpace + marginPx + pageGapPx + marginPx
+
+          spacers.push({
+            pos: block.pos,
+            height: spacerHeightPx,
+            pageNumber: currentPageNum,
+            visualOffset: visualOffset,
+            splitAtLine: splitResult.splitAtLine,
+            splitOffset: keepHeightPx,
+          })
+
+          // Move to next page
+          visualOffset += spacerHeightPx
+          currentPageNum++
+          cumulativeHeightOnPage = 0
+
+          // Add second part of block to next page
+          visualBlocks.push({
+            ...block,
+            visualTop: visualOffset,
+            visualBottom: visualOffset + overflowHeightPx,
+            pageNumber: currentPageNum,
+            splitPart: 2,
+            lineRange: [splitResult.splitAtLine, (block.lineCount ?? 1) - 1],
+            partHeightPx: overflowHeightPx,
+          })
+
+          visualOffset += overflowHeightPx
+          cumulativeHeightOnPage = overflowHeightPx
+        } else {
+          // Can't split - move entire block to next page
+          const remainingSpace = contentHeightPx - cumulativeHeightOnPage
+          const spacerHeightPx = remainingSpace + marginPx + pageGapPx + marginPx
+
+          spacers.push({
+            pos: block.pos,
+            height: spacerHeightPx,
+            pageNumber: currentPageNum,
+            visualOffset: visualOffset,
+          })
+
+          // Move to next page
+          visualOffset += spacerHeightPx
+          currentPageNum++
+          cumulativeHeightOnPage = 0
+
+          // Add block to new page
+          visualBlocks.push({
+            ...block,
+            visualTop: visualOffset,
+            visualBottom: visualOffset + blockHeightPx,
+            pageNumber: currentPageNum,
+          })
+
+          positionToPage.set(block.pos, currentPageNum)
+          visualOffset += blockHeightPx
+          cumulativeHeightOnPage = blockHeightPx
+        }
+      } else {
+        // Block fits on current page
+        visualBlocks.push({
+          ...block,
+          visualTop: visualOffset,
+          visualBottom: visualOffset + blockHeightPx,
+          pageNumber: currentPageNum,
+        })
+
+        positionToPage.set(block.pos, currentPageNum)
+        visualOffset += blockHeightPx
+        cumulativeHeightOnPage += blockHeightPx
+      }
+    }
+
+    // Build the basic pagination model
+    const pages = this.computePages(measurements)
+    const totalContentHeight = measurements.reduce((sum, m) => sum + m.height, 0)
+
+    return {
+      pages,
+      dimensions: this.dimensions,
+      totalContentHeight,
+      pageCount: Math.max(currentPageNum, pages.length),
+      visualBlocks,
+      spacers,
+      positionToPage,
+    }
+  }
+
+  /**
+   * Try to split a block at line boundaries
+   *
+   * Returns information about where to split, respecting widow/orphan rules.
+   */
+  private tryLineLevelSplit(
+    block: BlockMeasurement,
+    availableSpacePx: number,
+    _pixelsPerPoint: number
+  ): {
+    canSplit: boolean
+    splitAtLine: number
+    keepHeightPx: number
+  } {
+    // Can only split blocks with line measurements
+    if (!block.splittableAtLine || !block.lines || block.lines.length <= 1) {
+      return { canSplit: false, splitAtLine: 0, keepHeightPx: 0 }
+    }
+
+    const lines = block.lines
+    const minOrphans = this.config.orphanLines
+    const minWidows = this.config.widowLines
+
+    // Find how many lines fit in available space
+    let fittingLines = 0
+    let fittingHeightPx = 0
+
+    for (const line of lines) {
+      if (line.bottomPx <= availableSpacePx) {
+        fittingLines++
+        fittingHeightPx = line.bottomPx
+      } else {
+        break
+      }
+    }
+
+    // Apply orphan control (minimum lines at bottom of page)
+    if (fittingLines > 0 && fittingLines < minOrphans) {
+      // Not enough lines to avoid orphans - don't split
+      return { canSplit: false, splitAtLine: 0, keepHeightPx: 0 }
+    }
+
+    // Apply widow control (minimum lines at top of next page)
+    const overflowLines = lines.length - fittingLines
+    if (overflowLines > 0 && overflowLines < minWidows) {
+      // Would create widows - move more lines to next page
+      const linesToMove = minWidows - overflowLines
+      fittingLines = Math.max(0, fittingLines - linesToMove)
+
+      if (fittingLines < minOrphans) {
+        // Can't satisfy both constraints - don't split
+        return { canSplit: false, splitAtLine: 0, keepHeightPx: 0 }
+      }
+
+      // Recalculate fitting height
+      if (fittingLines > 0) {
+        fittingHeightPx = lines[fittingLines - 1].bottomPx
+      } else {
+        fittingHeightPx = 0
+      }
+    }
+
+    if (fittingLines === 0) {
+      return { canSplit: false, splitAtLine: 0, keepHeightPx: 0 }
+    }
+
+    return {
+      canSplit: true,
+      splitAtLine: fittingLines,
+      keepHeightPx: fittingHeightPx,
     }
   }
 

@@ -25,11 +25,14 @@ import type {
   PaginationModel,
   PaginationConfig,
   PageDimensions,
+  PageSpacer,
+  VisualPaginationModel,
 } from '../pagination'
 import {
   ReflowEngine,
   createPageDimensions,
   DEFAULT_PAGINATION_CONFIG,
+  DOMReadinessChecker,
 } from '../pagination'
 import type { JSONContent, DocumentMetadata, WriterKitExtension } from '../core'
 import { Editor as CoreEditor } from '../core'
@@ -162,7 +165,17 @@ export function WriterKitProvider({
   // Pagination state
   const [pages, setPages] = useState<PageBoundary[]>([])
   const [paginationModel, setPaginationModel] = useState<PaginationModel | null>(null)
+  const [reflowEngine, setReflowEngine] = useState<ReflowEngine | null>(null)
+
+  // Store raw initial content for immediate access by Editor
+  const initialContentRef = useRef<string | JSONContent | undefined>(initialContent)
+
+  // Refs for synchronization (avoid stale closures)
   const reflowEngineRef = useRef<ReflowEngine | null>(null)
+  const pendingViewRef = useRef<EditorView | null>(null)
+
+  // DOM readiness checker
+  const domReadinessChecker = useMemo(() => new DOMReadinessChecker(), [])
 
   // Markdown manager
   const markdownManager = useMemo(() => new MarkdownManager(), [])
@@ -181,12 +194,21 @@ export function WriterKitProvider({
     })
 
     reflowEngineRef.current = engine
+    setReflowEngine(engine)
+
+    // Check if there's a pending view to connect
+    if (pendingViewRef.current) {
+      engine.setView(pendingViewRef.current)
+      triggerReflowWhenReady(engine, pendingViewRef.current, domReadinessChecker)
+      pendingViewRef.current = null
+    }
 
     return () => {
       engine.destroy()
       reflowEngineRef.current = null
+      setReflowEngine(null)
     }
-  }, [config.pagination])
+  }, [config.pagination, domReadinessChecker])
 
   // Parse initial content
   useEffect(() => {
@@ -240,16 +262,16 @@ export function WriterKitProvider({
     setIsDirty(true)
 
     // Update reflow engine if page settings changed
-    if (reflowEngineRef.current) {
+    if (reflowEngine) {
       const paginationConfig: Partial<PaginationConfig> = {}
       if (newMetadata.pageSize) paginationConfig.pageSize = newMetadata.pageSize
       if (newMetadata.orientation) paginationConfig.orientation = newMetadata.orientation
       if (newMetadata.margins) paginationConfig.margins = newMetadata.margins
       if (Object.keys(paginationConfig).length > 0) {
-        reflowEngineRef.current.setConfig(paginationConfig)
+        reflowEngine.setConfig(paginationConfig)
       }
     }
-  }, [])
+  }, [reflowEngine])
 
   const dispatch = useCallback(
     (tr: Transaction) => {
@@ -319,12 +341,30 @@ export function WriterKitProvider({
   }, [doc, metadata, onChange])
 
   // Internal setter for view registration
+  // Uses refs to avoid stale closure issues
   const registerView = useCallback((editorView: EditorView | null) => {
     setView(editorView)
-    if (editorView && reflowEngineRef.current) {
-      reflowEngineRef.current.setView(editorView)
+
+    if (editorView) {
+      if (reflowEngineRef.current) {
+        // Engine is ready - connect immediately
+        reflowEngineRef.current.setView(editorView)
+        triggerReflowWhenReady(reflowEngineRef.current, editorView, domReadinessChecker)
+      } else {
+        // Engine not ready yet - queue the view for later
+        pendingViewRef.current = editorView
+      }
+    } else {
+      pendingViewRef.current = null
     }
-  }, [])
+  }, [domReadinessChecker]) // No reflowEngine dependency - uses ref
+
+  // Stable callback for requesting reflow (uses ref to avoid stale closures)
+  const requestReflow = useCallback(() => {
+    if (reflowEngineRef.current) {
+      reflowEngineRef.current.requestReflow()
+    }
+  }, []) // Empty deps - uses ref which is always current
 
   // Internal setter for state updates
   const updateState = useCallback((newState: EditorState) => {
@@ -342,7 +382,7 @@ export function WriterKitProvider({
       paginationModel,
       isLoading,
       isDirty,
-      reflowEngine: reflowEngineRef.current,
+      reflowEngine,
       storage,
       setContent,
       setMetadata,
@@ -362,6 +402,7 @@ export function WriterKitProvider({
       paginationModel,
       isLoading,
       isDirty,
+      reflowEngine,
       storage,
       setContent,
       setMetadata,
@@ -380,10 +421,12 @@ export function WriterKitProvider({
       ...contextValue,
       _registerView: registerView,
       _updateState: updateState,
-      _reflowEngine: reflowEngineRef.current,
+      _reflowEngine: reflowEngine,
+      _requestReflow: requestReflow,
       _extensions: config.extensions ?? [],
+      _initialContent: initialContentRef.current,
     }),
-    [contextValue, registerView, updateState, config.extensions]
+    [contextValue, registerView, updateState, config.extensions, reflowEngine, requestReflow]
   )
 
   return (
@@ -430,7 +473,9 @@ interface InternalContextValue extends WriterKitContextValue {
   _registerView?: (view: EditorView | null) => void
   _updateState?: (state: EditorState) => void
   _reflowEngine?: ReflowEngine | null
+  _requestReflow?: () => void
   _extensions?: WriterKitExtension[]
+  _initialContent?: string | JSONContent
 }
 
 /**
@@ -471,10 +516,15 @@ export function Editor({
     // Get extensions from context config
     const extensions = context?._extensions ?? []
 
-    // Determine initial content
+    // Determine initial content - use prop or fall back to provider's initial content
     let initialContent: string | undefined
     if (content) {
       initialContent = typeof content === 'string' ? content : undefined
+    } else if (context?._initialContent) {
+      // Use the raw initial content from the provider (available immediately)
+      initialContent = typeof context._initialContent === 'string'
+        ? context._initialContent
+        : undefined
     }
 
     try {
@@ -489,9 +539,8 @@ export function Editor({
           context?._updateState?.(e.state)
 
           // Notify reflow engine of document changes
-          if (context?._reflowEngine && e.view) {
-            context._reflowEngine.requestReflow()
-          }
+          // Uses the stable _requestReflow callback to avoid stale closure issues
+          context?._requestReflow?.()
 
           // Call user callback
           onUpdate?.(e.getJSON())
@@ -505,12 +554,9 @@ export function Editor({
       editorRef.current = editor
 
       // Register view with context
+      // The registerView callback handles connecting to the reflow engine
+      // and triggering initial reflow with proper DOM readiness checking
       context?._registerView?.(editor.view)
-
-      // Connect reflow engine
-      if (context?._reflowEngine) {
-        context._reflowEngine.setView(editor.view)
-      }
 
       // Set up focus/blur handlers
       editor.on('focus', () => onFocus?.())
@@ -718,10 +764,15 @@ export function useWriterKit(): WriterKitContextValue {
  * Hook to access the current page model.
  * Returns the array of pages and pagination utilities.
  *
+ * The visual model provides the single source of truth for page layout:
+ * - spacers: where to inject visual breaks between pages
+ * - visualBlocks: visual positions and page assignments for each block
+ * - positionToPage: map from document position to page number
+ *
  * @example
  * ```tsx
  * function PageNavigator() {
- *   const { currentPage, totalPages, goToPage } = usePageBoundary()
+ *   const { currentPage, totalPages, goToPage, spacers } = usePageBoundary()
  *
  *   return (
  *     <div>
@@ -738,6 +789,12 @@ export function usePageBoundary(): {
   totalPages: number
   goToPage: (page: number) => void
   getPageForPosition: (pos: number) => number
+  /** Get spacers from the visual model (single source of truth) */
+  spacers: PageSpacer[]
+  /** Get the complete visual pagination model */
+  visualModel: VisualPaginationModel | null
+  /** @deprecated Use spacers property instead */
+  getSpacers: () => PageSpacer[]
 } {
   const context = useContext(WriterKitContext)
   if (!context) {
@@ -777,12 +834,26 @@ export function usePageBoundary(): {
     [context.reflowEngine, context.paginationModel]
   )
 
+  // Get visual model from the reflow engine (single source of truth)
+  const visualModel = context.reflowEngine?.getVisualModel() ?? null
+
+  // Spacers from the visual model
+  const spacers = visualModel?.spacers ?? []
+
+  // Deprecated method for backwards compatibility
+  const getSpacers = useCallback((): PageSpacer[] => {
+    return spacers
+  }, [spacers])
+
   return {
     pages: context.pages,
     currentPage,
     totalPages: context.pages.length,
     goToPage,
     getPageForPosition,
+    spacers,
+    visualModel,
+    getSpacers,
   }
 }
 
@@ -920,6 +991,23 @@ export function useReflowStats(): {
 // =============================================================================
 
 /**
+ * Trigger reflow when DOM is ready for measurement
+ */
+async function triggerReflowWhenReady(
+  engine: ReflowEngine,
+  view: EditorView,
+  checker: DOMReadinessChecker
+): Promise<void> {
+  const result = await checker.waitForReady(view)
+  if (result.ready) {
+    engine.forceFullReflow()
+  } else {
+    console.warn('WriterKit: DOM not ready after max retries, forcing reflow anyway')
+    engine.forceFullReflow()
+  }
+}
+
+/**
  * Get default document metadata
  */
 function getDefaultMetadata(): DocumentMetadata {
@@ -944,3 +1032,6 @@ function getDefaultMetadata(): DocumentMetadata {
 function getDefaultDimensions(): PageDimensions {
   return createPageDimensions(DEFAULT_PAGINATION_CONFIG)
 }
+
+// Re-export pagination types for consumers
+export type { PageSpacer, VisualPaginationModel } from '../pagination'

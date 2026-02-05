@@ -16,6 +16,8 @@ import type {
   PageDimensions,
   ReflowChange,
   PosRange,
+  PageSpacer,
+  VisualPaginationModel,
 } from './types'
 import { PageComputer } from './PageComputer'
 import { Measurer } from './Measurer'
@@ -52,6 +54,9 @@ export class ReflowEngine {
   private computer: PageComputer
   private view: EditorView | null = null
   private currentModel: PaginationModel | null = null
+  private currentVisualModel: VisualPaginationModel | null = null
+  private pageGapPx: number = 40
+  private marginPx: number = 72
 
   // Debounce state
   private pendingReflow: ReturnType<typeof setTimeout> | null = null
@@ -281,6 +286,13 @@ export class ReflowEngine {
         newModel = this.computer.compute(doc)
       }
 
+      // Also compute visual model (single source of truth for spacers)
+      const newVisualModel = this.computer.computeVisual(
+        doc,
+        this.pageGapPx,
+        this.marginPx
+      )
+
       // Clear pending changes
       this.pendingChanges = []
 
@@ -290,6 +302,7 @@ export class ReflowEngine {
         !this.pagesEqual(this.currentModel, newModel)
 
       this.currentModel = newModel
+      this.currentVisualModel = newVisualModel
       this.lastReflowTime = Date.now()
 
       // Track performance
@@ -437,5 +450,47 @@ export class ReflowEngine {
     this.reflowCount = 0
     this.totalReflowTime = 0
     this.measurer.resetStats()
+  }
+
+  /**
+   * Get spacers from the visual pagination model
+   *
+   * Returns an array of spacers that should be injected into the document
+   * to push content past page boundaries. Each spacer represents the gap
+   * between the end of one page's content and the start of the next.
+   *
+   * This is the single source of truth for page layout - spacers are computed
+   * during reflow and cached in the visual model.
+   *
+   * @param _pageGapPx - Deprecated: gap is now computed during reflow
+   * @param _marginPx - Deprecated: margin is now computed during reflow
+   */
+  getSpacers(_pageGapPx?: number, _marginPx?: number): PageSpacer[] {
+    return this.currentVisualModel?.spacers ?? []
+  }
+
+  /**
+   * Get the visual pagination model
+   *
+   * This provides the single source of truth for page layout including:
+   * - Visual positions (in pixels) for each block
+   * - Which page each block belongs to
+   * - Spacers to inject at page breaks with exact heights and positions
+   */
+  getVisualModel(): VisualPaginationModel | null {
+    return this.currentVisualModel
+  }
+
+  /**
+   * Configure the visual layout parameters
+   *
+   * @param pageGapPx - Gap between pages in pixels
+   * @param marginPx - Top/bottom margin of each page in pixels
+   */
+  setVisualLayoutParams(pageGapPx: number, marginPx: number): void {
+    this.pageGapPx = pageGapPx
+    this.marginPx = marginPx
+    // Trigger reflow to update spacers with new parameters
+    this.requestReflow()
   }
 }

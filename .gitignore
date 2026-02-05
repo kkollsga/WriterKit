@@ -40,3 +40,6 @@ test-results/
 
 # Claude Code
 .claude/
+
+# Test app
+.testapp/

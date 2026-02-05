@@ -978,6 +978,33 @@ jobs:
 
 **Deliverable:** Working pagination with visual pages
 
+### Phase 2.5: Bug Fixes ✅ COMPLETE
+
+Discovered issues from `.testapp` integration testing, fixed before continuing.
+
+**Browser Compatibility:**
+
+- [x] Replace gray-matter with custom YAML parser (removes Node.js Buffer dependency)
+- [x] YAMLParser.ts - Parse YAML frontmatter without Node.js APIs
+- [x] YAMLStringifier.ts - Serialize to YAML format
+- [x] Update Frontmatter.ts to use new parser
+- [x] Remove gray-matter dependency from package.json
+
+**React Timing/Race Conditions:**
+
+- [x] Fix view registration race condition in WriterKitProvider
+- [x] Add ref-based synchronization for ReflowEngine
+- [x] Add pending view queue for mount order independence
+- [x] Ensure registerView never captures stale state
+
+**DOM Measurement Timing:**
+
+- [x] DOMReadinessChecker utility with double RAF + exponential backoff
+- [x] Replace setTimeout(100ms) with DOM-aware waiting
+- [x] Validate first block has non-zero dimensions before measuring
+
+**Deliverable:** .testapp works correctly - pagination shows pages, editor connected
+
 ### Phase 3: Export Pipeline
 
 - [ ] PDFExporter with pdf-lib (searchable text)

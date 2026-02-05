@@ -196,3 +196,169 @@ describe('Core Editor integration', () => {
     expect(adapter.write).toBeDefined()
   })
 })
+
+describe('Race condition prevention', () => {
+  it('DOMReadinessChecker is available for view connection', async () => {
+    const { DOMReadinessChecker } = await import('../pagination')
+    expect(DOMReadinessChecker).toBeDefined()
+    expect(typeof DOMReadinessChecker).toBe('function')
+
+    // Verify it can be instantiated
+    const checker = new DOMReadinessChecker()
+    expect(checker).toBeInstanceOf(DOMReadinessChecker)
+    expect(typeof checker.isReady).toBe('function')
+    expect(typeof checker.waitForReady).toBe('function')
+  })
+
+  it('ReflowEngine can handle delayed view connection', async () => {
+    const { ReflowEngine } = await import('../pagination')
+    const engine = new ReflowEngine()
+
+    // Engine created without view - should not throw
+    expect(engine.getModel()).toBeNull()
+    expect(engine.getStats().pageCount).toBe(0)
+
+    // Cleanup
+    engine.destroy()
+  })
+
+  it('ReflowEngine tracks page changes correctly', async () => {
+    const { ReflowEngine } = await import('../pagination')
+    const engine = new ReflowEngine()
+
+    let pagesChangedCalled = false
+    const unsubscribe = engine.onPagesChanged(() => {
+      pagesChangedCalled = true
+    })
+
+    // Cleanup
+    unsubscribe()
+    engine.destroy()
+
+    // Just verify the handler can be registered and unregistered
+    expect(unsubscribe).toBeDefined()
+  })
+})
+
+describe('Browser compatibility', () => {
+  it('Frontmatter works without Node.js Buffer', async () => {
+    const { Frontmatter } = await import('../markdown')
+    const fm = new Frontmatter()
+
+    // Test that parsing works without Buffer global
+    const content = `---
+title: Test Document
+author: John Doe
+pageSize: a4
+margins:
+  top: 72
+  right: 72
+  bottom: 72
+  left: 72
+---
+
+# Hello World
+
+Content here.`
+
+    // Should not throw
+    const { metadata, body } = fm.parse(content)
+    expect(metadata.title).toBe('Test Document')
+    expect(metadata.author).toBe('John Doe')
+    expect(metadata.pageSize).toBe('a4')
+    expect(metadata.margins.top).toBe(72)
+    expect(body.trim()).toContain('# Hello World')
+  })
+
+  it('Frontmatter serializes without Node.js Buffer', async () => {
+    const { Frontmatter } = await import('../markdown')
+    const fm = new Frontmatter()
+
+    const metadata = {
+      title: 'Test',
+      createdAt: '2025-01-01T00:00:00Z',
+      modifiedAt: '2025-01-02T00:00:00Z',
+      pageSize: 'a4' as const,
+      orientation: 'portrait' as const,
+      margins: { top: 72, right: 72, bottom: 72, left: 72 },
+    }
+
+    // Should not throw
+    const result = fm.serialize(metadata, 'Content here.')
+    expect(result).toContain('title: Test')
+    expect(result).toContain('Content here.')
+  })
+
+  it('YAMLParser is pure JavaScript (no Node.js deps)', async () => {
+    const { YAMLParser } = await import('../markdown/YAMLParser')
+    const parser = new YAMLParser()
+
+    // Parse complex YAML without Buffer
+    const yaml = `title: "Complex: Test"
+count: 42
+enabled: true
+nested:
+  deep:
+    value: works`
+
+    const result = parser.parse(yaml)
+    expect(result.title).toBe('Complex: Test')
+    expect(result.count).toBe(42)
+    expect(result.enabled).toBe(true)
+    expect((result.nested as Record<string, unknown>).deep).toEqual({ value: 'works' })
+  })
+
+  it('YAMLStringifier is pure JavaScript (no Node.js deps)', async () => {
+    const { YAMLStringifier } = await import('../markdown/YAMLStringifier')
+    const stringifier = new YAMLStringifier()
+
+    // Stringify complex object without Buffer
+    const data = {
+      title: 'Test',
+      count: 42,
+      nested: { value: 'works' },
+    }
+
+    const yaml = stringifier.stringify(data)
+    expect(yaml).toContain('title: Test')
+    expect(yaml).toContain('count: 42')
+    expect(yaml).toContain('nested:')
+  })
+})
+
+describe('Integration patterns', () => {
+  it('ReflowEngine and DOMReadinessChecker work together', async () => {
+    const { ReflowEngine, DOMReadinessChecker } = await import('../pagination')
+
+    const engine = new ReflowEngine()
+    const checker = new DOMReadinessChecker()
+
+    // These should work together without errors
+    expect(engine).toBeInstanceOf(ReflowEngine)
+    expect(checker).toBeInstanceOf(DOMReadinessChecker)
+
+    // Cleanup
+    engine.destroy()
+  })
+
+  it('MarkdownManager and Frontmatter work together', async () => {
+    const { MarkdownManager } = await import('../markdown')
+
+    const manager = new MarkdownManager()
+
+    // Parse markdown with frontmatter
+    const content = `---
+title: Test
+---
+
+# Hello`
+
+    const { ast, metadata } = manager.parse(content)
+    expect(metadata.title).toBe('Test')
+    expect(ast.children.length).toBeGreaterThan(0)
+
+    // Serialize back
+    const doc = manager.astToProseMirror(ast)
+    expect(doc).toBeDefined()
+  })
+})

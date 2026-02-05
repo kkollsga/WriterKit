@@ -2,3 +2,4 @@ packages:
   - 'packages/writerkit'
   - 'packages/test-fixtures'
   - 'packages/test-utils'
+  - '.testapp'

@@ -55,6 +55,10 @@ export type {
   SplitResult,
   PosRange,
   ReflowChange,
+  PageSpacer,
+  VisualBlockMeasurement,
+  VisualPaginationModel,
+  LineMeasurement,
 } from './types'
 
 export {
@@ -73,6 +77,20 @@ export { PageComputer } from './PageComputer'
 // ReflowEngine
 export { ReflowEngine } from './ReflowEngine'
 
+// LineMeasurer
+export { LineMeasurer } from './LineMeasurer'
+export type { BlockLineMeasurement } from './LineMeasurer'
+
 // PageView
 export { PageView, PageViewManager, VirtualPaginator } from './PageView'
 export type { PageViewOptions, VirtualPaginatorConfig } from './PageView'
+
+// DOMReadinessChecker
+export {
+  DOMReadinessChecker,
+  domReadinessChecker,
+} from './DOMReadinessChecker'
+export type {
+  DOMReadinessConfig,
+  DOMReadinessResult,
+} from './DOMReadinessChecker'
