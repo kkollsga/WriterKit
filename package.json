@@ -1,0 +1,38 @@
+{
+  "name": "writerkit",
+  "version": "0.0.1",
+  "private": true,
+  "description": "A ProseMirror-based toolkit for building word processors with native pagination, markdown storage, and searchable PDF export",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/writerkit/writerkit"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "vitest",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:visual": "vitest run --project visual",
+    "test:e2e": "playwright test",
+    "test:bench": "vitest bench",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "lint": "eslint packages/*/src --ext .ts,.tsx",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

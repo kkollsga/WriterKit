@@ -1,0 +1,31 @@
+{
+  "name": "@writerkit/extensions",
+  "version": "0.0.1",
+  "description": "Built-in extensions for WriterKit (tables, images, headers/footers)",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@writerkit/core": "workspace:*",
+    "@writerkit/pagination": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "license": "MIT"
+}
