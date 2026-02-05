@@ -37,3 +37,6 @@ test-results/
 
 # Snapshots (visual regression)
 **/__snapshots__/__diff_output__/
+
+# Claude Code
+.claude/
