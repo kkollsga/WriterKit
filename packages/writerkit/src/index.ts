@@ -236,6 +236,8 @@ export {
   useWriterKit,
   usePageBoundary,
   useDocumentState,
+  useEditorFocus,
+  useReflowStats,
 } from './react'
 
 export type {
@@ -243,4 +245,5 @@ export type {
   WriterKitProviderProps,
   EditorProps,
   PageViewProps as ReactPageViewProps,
+  WriterKitConfig,
 } from './react'

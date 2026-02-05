@@ -1,6 +1,6 @@
 {
   "name": "writerkit",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "private": true,
   "description": "A ProseMirror-based toolkit for building word processors with native pagination, markdown storage, and searchable PDF export",
   "repository": {

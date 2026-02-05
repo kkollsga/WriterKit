@@ -9,7 +9,7 @@ export default defineConfig({
     'export/index': 'src/export/index.ts',
     'storage/index': 'src/storage/index.ts',
     'extensions/index': 'src/extensions/index.ts',
-    'react/index': 'src/react/index.ts',
+    'react/index': 'src/react/index.tsx',
   },
   format: ['cjs', 'esm'],
   dts: true,
