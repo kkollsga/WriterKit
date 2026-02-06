@@ -348,12 +348,13 @@ margins:
 Content.`
 
       const { metadata } = manager.markdownToProseMirror(original)
+      const margins = metadata.margins as { top: number; right: number; bottom: number; left: number }
 
-      expect(metadata.margins).toBeDefined()
-      expect(metadata.margins.top).toBe(72)
-      expect(metadata.margins.right).toBe(72)
-      expect(metadata.margins.bottom).toBe(72)
-      expect(metadata.margins.left).toBe(72)
+      expect(margins).toBeDefined()
+      expect(margins.top).toBe(72)
+      expect(margins.right).toBe(72)
+      expect(margins.bottom).toBe(72)
+      expect(margins.left).toBe(72)
     })
 
     it('metadata survives round-trip', () => {

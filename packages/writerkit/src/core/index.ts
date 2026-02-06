@@ -10,10 +10,6 @@ export { CommandManager, builtInCommands } from './CommandManager'
 export type {
   // Document
   DocumentMetadata,
-  PageSize,
-  PageOrientation,
-  Margins,
-  HeaderFooterConfig,
 
   // Editor
   EditorConfig,

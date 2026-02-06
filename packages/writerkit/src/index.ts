@@ -1,69 +1,40 @@
 /**
  * # WriterKit
  *
- * A ProseMirror-based toolkit for building word processors with:
+ * A minimal ProseMirror-based rich text editor with:
  *
- * - **Native pagination** - Pages computed from content flow, not CSS hacks
- * - **Searchable PDF export** - Real text using pdf-lib, not screenshots
- * - **DOCX and ODT export** - Native document formats
- * - **Markdown storage** - YAML frontmatter for metadata, portable format
- * - **Familiar extension system** - Easy to extend and customize
+ * - **Core editor** - ProseMirror wrapper with extension system
+ * - **Markdown support** - Parse and serialize markdown with frontmatter
+ * - **Rich content** - Tables, lists, headings, formatting, and more
  *
  * ## Installation
  *
  * ```bash
  * npm install writerkit
- * # or
- * pnpm add writerkit
- * # or
- * yarn add writerkit
  * ```
  *
  * ## Quick Start
  *
  * ```typescript
- * import {
- *   Editor,
- *   Extension,
- *   MarkdownManager,
- *   ReflowEngine,
- *   ExportPipeline,
- * } from 'writerkit'
+ * import { Editor, WriterKitExtensions, MarkdownManager } from 'writerkit'
  *
  * // Create editor with extensions
  * const editor = new Editor({
- *   extensions: [
- *     // Add your extensions here
- *   ],
+ *   element: document.getElementById('editor'),
+ *   extensions: WriterKitExtensions,
+ *   content: '# Hello World',
  * })
  *
- * // Load markdown document
- * const manager = new MarkdownManager()
- * const { metadata, doc } = manager.parse(markdownContent)
- *
- * // Set up pagination
- * const reflow = new ReflowEngine({
- *   pageSize: metadata.pageSize || 'a4',
- *   margins: metadata.margins,
- * })
- *
- * // Export to PDF
- * const pipeline = new ExportPipeline()
- * const result = await pipeline.exportPDF(editor.state.doc, {
- *   metadata: { title: metadata.title },
- *   paginationModel: reflow.getModel(),
- * })
+ * // Get content as markdown
+ * const markdown = editor.getMarkdown()
  * ```
  *
  * ## Subpath Imports
  *
- * You can import from specific subpaths for better tree-shaking:
- *
  * ```typescript
  * import { Editor } from 'writerkit/core'
- * import { ReflowEngine } from 'writerkit/pagination'
- * import { ExportPipeline } from 'writerkit/export'
  * import { MarkdownManager } from 'writerkit/markdown'
+ * import { WriterKitExtensions } from 'writerkit/extensions'
  * ```
  *
  * @packageDocumentation
@@ -94,10 +65,6 @@ export type {
   InputRule,
   PasteRule,
   DocumentMetadata,
-  PageSize,
-  PageOrientation,
-  Margins,
-  HeaderFooterConfig,
   JSONContent,
 } from './core'
 
@@ -125,103 +92,42 @@ export type {
 } from './markdown'
 
 // =============================================================================
-// Pagination - Page computation engine
-// =============================================================================
-
-export {
-  PAGE_SIZES,
-  DEFAULT_PAGINATION_CONFIG,
-  createPageDimensions,
-  configFromMetadata,
-  Measurer,
-  PageComputer,
-  ReflowEngine,
-  PageView,
-  PageViewManager,
-  VirtualPaginator,
-} from './pagination'
-
-export type {
-  PageDimensions,
-  PageBoundary,
-  NodePosition,
-  PaginationModel,
-  BlockMeasurement,
-  PaginationConfig,
-  PaginationEvents,
-  SplitResult,
-  PosRange,
-  ReflowChange,
-  PageViewOptions,
-  VirtualPaginatorConfig,
-} from './pagination'
-
-// =============================================================================
-// Export - PDF, DOCX, ODT exporters
-// =============================================================================
-
-export {
-  ExportPipeline,
-  createExportPipeline,
-  PDFExporter,
-  DOCXExporter,
-  ODTExporter,
-  DEFAULT_FONTS,
-  parsePageRange,
-  replaceTemplateVariables,
-} from './export'
-
-export type {
-  ExportFormat,
-  ExportOptions,
-  PDFExportOptions,
-  DOCXExportOptions,
-  ODTExportOptions,
-  ExportResult,
-  ExportStats,
-  ExportPipelineConfig,
-  FormatOptions,
-  FontConfig,
-  RenderContext,
-  NodeRenderer,
-  Exporter,
-} from './export'
-
-// =============================================================================
-// Storage - Storage adapters
-// =============================================================================
-
-export {
-  StorageAdapter,
-  FileSystemAdapter,
-  IndexedDBAdapter,
-  MemoryAdapter,
-  DocumentStateManager,
-} from './storage'
-
-export type {
-  StorageAdapterConfig,
-  StoredDocument,
-  DocumentState,
-  DocumentStateEvents,
-} from './storage'
-
-// =============================================================================
 // Extensions - Built-in extensions
 // =============================================================================
 
 export {
+  // Individual extensions
+  HeadingExtension,
+  BlockquoteExtension,
+  CodeBlockExtension,
+  HorizontalRuleExtension,
+  HardBreakExtension,
+  BoldExtension,
+  ItalicExtension,
+  CodeExtension,
+  LinkExtension,
   TableExtension,
-  ImageExtension,
-  HeaderFooterExtension,
   ListsExtension,
+  // Bundles
+  BasicTextExtensions,
   WriterKitExtensions,
+  // Legacy aliases
+  Tables,
+  Lists,
+  Heading,
+  Blockquote,
+  CodeBlock,
+  HorizontalRule,
+  HardBreak,
+  Bold,
+  Italic,
+  Code,
+  Link,
 } from './extensions'
 
 export type {
   TableOptions,
-  ImageOptions,
-  HeaderFooterOptions,
+  ListOptions,
 } from './extensions'
 
 // =============================================================================
@@ -232,18 +138,14 @@ export {
   WriterKitContext,
   WriterKitProvider,
   Editor as ReactEditor,
-  PageView as ReactPageView,
   useWriterKit,
-  usePageBoundary,
   useDocumentState,
   useEditorFocus,
-  useReflowStats,
 } from './react'
 
 export type {
   WriterKitContextValue,
   WriterKitProviderProps,
   EditorProps,
-  PageViewProps as ReactPageViewProps,
   WriterKitConfig,
 } from './react'

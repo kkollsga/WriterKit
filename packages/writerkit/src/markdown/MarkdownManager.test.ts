@@ -146,18 +146,17 @@ Paragraph 2.`
         title: 'Untitled', // Default
         createdAt: '2025-01-01T00:00:00Z',
         modifiedAt: '2025-01-02T00:00:00Z',
-        pageSize: 'a4', // Default
-        orientation: 'portrait', // Default
-        margins: { top: 72, right: 72, bottom: 72, left: 72 }, // Default
       }
 
       const { markdown } = manager.serialize(doc, metadata, {
         minimalFrontmatter: true,
       })
 
-      // Should not include default values
+      // Should not include default title
       expect(markdown).not.toContain('title:')
-      expect(markdown).not.toContain('pageSize:')
+      // Should include timestamps
+      expect(markdown).toContain('createdAt:')
+      expect(markdown).toContain('modifiedAt:')
     })
 
     it('converts page breaks to HTML comments', () => {
@@ -266,8 +265,8 @@ Content.`
       const defaults = manager.getDefaultMetadata()
 
       expect(defaults.title).toBe('Untitled')
-      expect(defaults.pageSize).toBe('a4')
-      expect(defaults.orientation).toBe('portrait')
+      expect(defaults.createdAt).toBeDefined()
+      expect(defaults.modifiedAt).toBeDefined()
     })
   })
 
@@ -277,9 +276,6 @@ Content.`
         title: 'Test',
         createdAt: '2025-01-01T00:00:00Z',
         modifiedAt: '2025-01-01T00:00:00Z',
-        pageSize: 'a4',
-        orientation: 'portrait',
-        margins: { top: 72, right: 72, bottom: 72, left: 72 },
       }
 
       const updated = manager.updateModifiedAt(metadata)

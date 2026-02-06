@@ -1,6 +1,6 @@
 import { YAMLParser } from './YAMLParser'
 import { YAMLStringifier } from './YAMLStringifier'
-import type { DocumentMetadata, Margins, HeaderFooterConfig } from '../core'
+import type { DocumentMetadata } from '../core'
 
 const yamlParser = new YAMLParser()
 const yamlStringifier = new YAMLStringifier()
@@ -12,14 +12,6 @@ const DEFAULT_METADATA: DocumentMetadata = {
   title: 'Untitled',
   createdAt: new Date().toISOString(),
   modifiedAt: new Date().toISOString(),
-  pageSize: 'a4',
-  orientation: 'portrait',
-  margins: {
-    top: 72,
-    right: 72,
-    bottom: 72,
-    left: 72,
-  },
 }
 
 /**
@@ -30,12 +22,8 @@ const DEFAULT_METADATA: DocumentMetadata = {
  * ---
  * title: My Document
  * author: John Doe
- * pageSize: a4
- * margins:
- *   top: 72
- *   right: 72
- *   bottom: 72
- *   left: 72
+ * createdAt: 2024-01-01T00:00:00.000Z
+ * modifiedAt: 2024-01-02T00:00:00.000Z
  * ---
  *
  * Document content here...
@@ -51,11 +39,8 @@ export class Frontmatter {
   parse(content: string): { metadata: DocumentMetadata; body: string } {
     const { data, content: body } = yamlParser.extractFrontmatter(content)
 
-    // Deep merge with defaults
+    // Merge with defaults
     const metadata = this.mergeWithDefaults(data as Partial<DocumentMetadata>)
-
-    // Validate the merged metadata
-    this.validate(metadata)
 
     return { metadata, body }
   }
@@ -112,46 +97,10 @@ export class Frontmatter {
     const defaults = this.getDefaults()
 
     return {
+      ...data,
       title: data.title ?? defaults.title,
-      author: data.author,
       createdAt: data.createdAt ?? defaults.createdAt,
       modifiedAt: data.modifiedAt ?? defaults.modifiedAt,
-      pageSize: data.pageSize ?? defaults.pageSize,
-      orientation: data.orientation ?? defaults.orientation,
-      margins: this.mergeMargins(data.margins, defaults.margins),
-      header: data.header ? this.normalizeHeaderFooter(data.header) : undefined,
-      footer: data.footer ? this.normalizeHeaderFooter(data.footer) : undefined,
-    }
-  }
-
-  /**
-   * Merge margins with defaults
-   */
-  private mergeMargins(
-    margins: Partial<Margins> | undefined,
-    defaults: Margins
-  ): Margins {
-    if (!margins) return defaults
-
-    return {
-      top: margins.top ?? defaults.top,
-      right: margins.right ?? defaults.right,
-      bottom: margins.bottom ?? defaults.bottom,
-      left: margins.left ?? defaults.left,
-    }
-  }
-
-  /**
-   * Normalize header/footer config
-   */
-  private normalizeHeaderFooter(
-    config: Partial<HeaderFooterConfig>
-  ): HeaderFooterConfig {
-    return {
-      left: config.left,
-      center: config.center,
-      right: config.right,
-      showOnFirstPage: config.showOnFirstPage ?? true,
     }
   }
 
@@ -178,72 +127,14 @@ export class Frontmatter {
     result.createdAt = metadata.createdAt
     result.modifiedAt = metadata.modifiedAt
 
-    // Page settings only if non-default
-    if (metadata.pageSize !== defaults.pageSize) {
-      result.pageSize = metadata.pageSize
-    }
-
-    if (metadata.orientation !== defaults.orientation) {
-      result.orientation = metadata.orientation
-    }
-
-    // Margins only if different from default
-    if (!this.marginsEqual(metadata.margins, defaults.margins)) {
-      result.margins = metadata.margins
-    }
-
-    // Header/footer only if present
-    if (metadata.header) {
-      result.header = metadata.header
-    }
-
-    if (metadata.footer) {
-      result.footer = metadata.footer
+    // Include any additional custom fields
+    for (const [key, value] of Object.entries(metadata)) {
+      if (!['title', 'author', 'createdAt', 'modifiedAt'].includes(key) && value !== undefined) {
+        ;(result as Record<string, unknown>)[key] = value
+      }
     }
 
     return result
-  }
-
-  /**
-   * Compare two margin objects for equality
-   */
-  private marginsEqual(a: Margins, b: Margins): boolean {
-    return (
-      a.top === b.top &&
-      a.right === b.right &&
-      a.bottom === b.bottom &&
-      a.left === b.left
-    )
-  }
-
-  /**
-   * Validate metadata values
-   */
-  private validate(metadata: DocumentMetadata): void {
-    const validPageSizes = ['a4', 'letter', 'legal', 'a3', 'a5']
-    const validOrientations = ['portrait', 'landscape']
-
-    if (!validPageSizes.includes(metadata.pageSize)) {
-      throw new Error(
-        `Invalid page size: ${metadata.pageSize}. Must be one of: ${validPageSizes.join(', ')}`
-      )
-    }
-
-    if (!validOrientations.includes(metadata.orientation)) {
-      throw new Error(
-        `Invalid orientation: ${metadata.orientation}. Must be one of: ${validOrientations.join(', ')}`
-      )
-    }
-
-    // Validate margins are positive numbers
-    const { margins } = metadata
-    for (const [key, value] of Object.entries(margins)) {
-      if (typeof value !== 'number' || value < 0) {
-        throw new Error(
-          `Invalid margin.${key}: ${value}. Must be a positive number`
-        )
-      }
-    }
   }
 
   /**

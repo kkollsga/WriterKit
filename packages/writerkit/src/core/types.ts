@@ -10,28 +10,7 @@ export interface DocumentMetadata {
   author?: string
   createdAt: string
   modifiedAt: string
-  pageSize: PageSize
-  orientation: PageOrientation
-  margins: Margins
-  header?: HeaderFooterConfig
-  footer?: HeaderFooterConfig
-}
-
-export type PageSize = 'a4' | 'letter' | 'legal' | 'a3' | 'a5'
-export type PageOrientation = 'portrait' | 'landscape'
-
-export interface Margins {
-  top: number    // in points (1/72 inch)
-  right: number
-  bottom: number
-  left: number
-}
-
-export interface HeaderFooterConfig {
-  left?: string
-  center?: string
-  right?: string
-  showOnFirstPage?: boolean
+  [key: string]: unknown // Allow additional metadata
 }
 
 /**
@@ -71,6 +50,7 @@ export interface WriterKitEditor {
   // Content operations
   getMarkdown(): string
   getJSON(): JSONContent
+  getHTML(): string
   setContent(content: string | JSONContent): void
 
   // Commands

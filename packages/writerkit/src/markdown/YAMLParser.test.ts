@@ -208,7 +208,7 @@ Content.`
       const markdown = `---
 title: Test
 No closing delimiter, so treat as content.`
-      const { data, content } = parser.extractFrontmatter(markdown)
+      const { data } = parser.extractFrontmatter(markdown)
 
       // Should return empty data and original content
       expect(data).toEqual({})

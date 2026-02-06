@@ -387,7 +387,7 @@ describe('ASTConverter', () => {
     })
 
     it('converts tables', () => {
-      const ast: WriterKitRoot = {
+      const ast = {
         type: 'root',
         children: [
           {
@@ -419,7 +419,7 @@ describe('ASTConverter', () => {
             ],
           },
         ],
-      }
+      } as unknown as WriterKitRoot
 
       const result = converter.toProseMirror(ast)
 
@@ -1020,10 +1020,10 @@ describe('ASTConverter', () => {
 
     it('preserves unknown nodes when configured', () => {
       const converterWithPreserve = new ASTConverter({ preserveUnknown: true })
-      const ast: WriterKitRoot = {
+      const ast = {
         type: 'root',
-        children: [{ type: 'footnote' as 'paragraph' }], // Unknown type
-      }
+        children: [{ type: 'footnote' }], // Unknown type
+      } as unknown as WriterKitRoot
 
       const result = converterWithPreserve.toProseMirror(ast)
 
@@ -1034,10 +1034,10 @@ describe('ASTConverter', () => {
     })
 
     it('skips unknown nodes by default', () => {
-      const ast: WriterKitRoot = {
+      const ast = {
         type: 'root',
-        children: [{ type: 'footnote' as 'paragraph' }], // Unknown type
-      }
+        children: [{ type: 'footnote' }], // Unknown type
+      } as unknown as WriterKitRoot
 
       const result = converter.toProseMirror(ast)
 
